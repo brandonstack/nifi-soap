@@ -28,6 +28,7 @@ import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.axis2.transport.http.impl.httpclient3.HttpTransportPropertiesImpl;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.annotation.behavior.DynamicProperty;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
@@ -45,14 +46,11 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessorInitializationContext;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
-import org.apache.nifi.processor.io.InputStreamCallback;
 import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.util.StopWatch;
-import sun.rmi.runtime.Log;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -156,8 +154,14 @@ public class GetSOAP extends AbstractProcessor {
             .expressionLanguageSupported(false)
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
             .build();
+    protected static final PropertyDescriptor CONTENT_PARAMETER_KEY = new PropertyDescriptor
+            .Builder()
+            .name("Method Parameter of Content")
+            .description("Read Flowfile content and set as Request Parameter")
+            .expressionLanguageSupported(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
     private List<PropertyDescriptor> descriptors;
-
     private volatile Set<String> dynamicPropertyNames = new HashSet<>();
     private ServiceClient serviceClient;
 
@@ -176,13 +180,14 @@ public class GetSOAP extends AbstractProcessor {
         descriptors.add(USER_AGENT);
         descriptors.add(SO_TIMEOUT);
         descriptors.add(CONNECTION_TIMEOUT);
+        descriptors.add(CONTENT_PARAMETER_KEY);
         this.descriptors = Collections.unmodifiableList(descriptors);
 
     }
 
     @Override
     public void onPropertyModified(PropertyDescriptor descriptor, String oldValue, String newValue) {
-        if(descriptor.isDynamic()){
+        if (descriptor.isDynamic()) {
             final Set<String> newDynamicPropertyNames = new HashSet<>(dynamicPropertyNames);
             if (newValue == null) {
                 newDynamicPropertyNames.remove(descriptor.getName());
@@ -281,7 +286,7 @@ public class GetSOAP extends AbstractProcessor {
         final OMElement method = getSoapMethod(fac, omNamespace, context.getProperty(METHOD_NAME).getValue());
 
         FlowFile flowFile = session.get();
-        if(flowFile == null){
+        if (flowFile == null) {
             flowFile = session.create();
         }
         //now we need to walk the arguments and add them
@@ -334,21 +339,22 @@ public class GetSOAP extends AbstractProcessor {
         }
     }
 
-    /**
-     * 说明使用FlowContent
-     */
-    private static final String USE_FLOW_FILE_CONTENT = "useFlowFileContent";
-
     void addArgumentsToMethod(ProcessContext context, OMFactory fac, OMNamespace omNamespace, OMElement method, FlowFile flowFile, ProcessSession session) {
+        final String contentParam = context.getProperty(CONTENT_PARAMETER_KEY).getValue();
+        if (StringUtils.isNotEmpty(contentParam)) {
+            String dynamicValue = getContent(session, flowFile);
+            addParamToMethod(fac, omNamespace, method, contentParam, dynamicValue);
+        }
         for (String dynamicKey : dynamicPropertyNames) {
             String dynamicValue = context.getProperty(dynamicKey).evaluateAttributeExpressions(flowFile).getValue();
-            if (USE_FLOW_FILE_CONTENT.equals(dynamicValue)){
-                dynamicValue = getContent(session, flowFile);
-            }
-            OMElement value = getSoapMethod(fac, omNamespace, dynamicKey);
-            value.addChild(fac.createOMText(value, dynamicValue));
-            method.addChild(value);
+            addParamToMethod(fac, omNamespace, method, dynamicKey, dynamicValue);
         }
+    }
+
+    private void addParamToMethod(OMFactory fac, OMNamespace omNamespace, OMElement method, String dynamicKey, String dynamicValue) {
+        OMElement value = getSoapMethod(fac, omNamespace, dynamicKey);
+        value.addChild(fac.createOMText(value, dynamicValue));
+        method.addChild(value);
     }
 
     OMElement getSoapMethod(OMFactory fac, OMNamespace omNamespace, String value) {
