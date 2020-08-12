@@ -40,26 +40,12 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.logging.ComponentLog;
-import org.apache.nifi.processor.AbstractProcessor;
-import org.apache.nifi.processor.ProcessContext;
-import org.apache.nifi.processor.ProcessSession;
-import org.apache.nifi.processor.ProcessorInitializationContext;
-import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
-import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.apache.nifi.util.StopWatch;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -82,9 +68,18 @@ public class GetSOAP extends AbstractProcessor {
 
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
-            .name("success")
-            .description("All FlowFiles that are created are routed to this relationship")
+            .name("Success")
+            .description("A Response FlowFile will be routed upon success.")
             .build();
+    /**
+     * relation of failure
+     */
+    public static final Relationship REL_FAILURE = new Relationship.Builder()
+            .name("Failure")
+            .description("The original FlowFile will be route on any type of connection failure, timeout or general exception.")
+            .build();
+
+
     protected static final PropertyDescriptor ENDPOINT_URL = new PropertyDescriptor
             .Builder()
             .name("Endpoint URL")
@@ -93,10 +88,10 @@ public class GetSOAP extends AbstractProcessor {
             .expressionLanguageSupported(false)
             .addValidator(StandardValidators.URL_VALIDATOR)
             .build();
-    protected static final PropertyDescriptor WSDL_URL = new PropertyDescriptor
+    protected static final PropertyDescriptor NAMESPACE_URL = new PropertyDescriptor
             .Builder()
-            .name("WSDL URL")
-            .description("The url where the wsdl file can be retrieved and referenced.")
+            .name("Namespace URL")
+            .description("the namespace URI.")
             .required(true)
             .expressionLanguageSupported(false)
             .addValidator(StandardValidators.URL_VALIDATOR)
@@ -171,17 +166,17 @@ public class GetSOAP extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        final List<PropertyDescriptor> descriptors = new ArrayList<PropertyDescriptor>();
-        descriptors.add(ENDPOINT_URL);
-        descriptors.add(WSDL_URL);
-        descriptors.add(METHOD_NAME);
-        descriptors.add(USER_NAME);
-        descriptors.add(PASSWORD);
-        descriptors.add(USER_AGENT);
-        descriptors.add(SO_TIMEOUT);
-        descriptors.add(CONNECTION_TIMEOUT);
-        descriptors.add(CONTENT_PARAMETER_KEY);
-        this.descriptors = Collections.unmodifiableList(descriptors);
+        final List<PropertyDescriptor> myDescriptors = new ArrayList<>();
+        myDescriptors.add(ENDPOINT_URL);
+        myDescriptors.add(NAMESPACE_URL);
+        myDescriptors.add(METHOD_NAME);
+        myDescriptors.add(USER_NAME);
+        myDescriptors.add(PASSWORD);
+        myDescriptors.add(USER_AGENT);
+        myDescriptors.add(SO_TIMEOUT);
+        myDescriptors.add(CONNECTION_TIMEOUT);
+        myDescriptors.add(CONTENT_PARAMETER_KEY);
+        this.descriptors = Collections.unmodifiableList(myDescriptors);
 
     }
 
@@ -202,8 +197,9 @@ public class GetSOAP extends AbstractProcessor {
 
     @Override
     public Set<Relationship> getRelationships() {
-        final Set<Relationship> relationships = new HashSet<>(1);
+        final Set<Relationship> relationships = new HashSet<>(2);
         relationships.add(REL_SUCCESS);
+        relationships.add(REL_FAILURE);
         return relationships;
     }
 
@@ -278,10 +274,9 @@ public class GetSOAP extends AbstractProcessor {
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
 
-        final StopWatch stopWatch = new StopWatch(true);
         //get the dynamic properties, execute the call and return the results
         OMFactory fac = OMAbstractFactory.getOMFactory();
-        OMNamespace omNamespace = fac.createOMNamespace(context.getProperty(WSDL_URL).getValue(), "nifi");
+        OMNamespace omNamespace = fac.createOMNamespace(context.getProperty(NAMESPACE_URL).getValue(), "nifi");
 
         final OMElement method = getSoapMethod(fac, omNamespace, context.getProperty(METHOD_NAME).getValue());
 
@@ -291,9 +286,11 @@ public class GetSOAP extends AbstractProcessor {
         }
         //now we need to walk the arguments and add them
         addArgumentsToMethod(context, fac, omNamespace, method, flowFile, session);
-        final OMElement result = executeSoapMethod(method);
-        processSoapRequest(session, result, flowFile);
-        session.transfer(flowFile, REL_SUCCESS);
+        // execute soap method
+        flowFile = executeSoapMethod(method, session, flowFile);
+        if (flowFile != null) {
+            session.transfer(flowFile, REL_SUCCESS);
+        }
     }
 
     private String getContent(ProcessSession session, FlowFile flowFile) {
@@ -306,36 +303,26 @@ public class GetSOAP extends AbstractProcessor {
         return value.get();
     }
 
-    FlowFile processSoapRequest(ProcessSession session, final OMElement result, FlowFile flowFile) {
-        flowFile = session.write(flowFile, new OutputStreamCallback() {
-            @Override
-            public void process(final OutputStream out) throws IOException {
-                try {
-                    String response = result.getFirstElement().getText();
-                    getLogger().info(response);
-                    out.write(response.getBytes());
-                } catch (AxisFault axisFault) {
-                    final ComponentLog logger = getLogger();
-                    if (null != logger)
-                        logger.error("Failed parsing the data that came back from the web service method", axisFault);
-                    throw new ProcessException(axisFault);
-                }
-            }
-        });
-
-        final Map<String, String> attributes = new HashMap<>();
-        attributes.put(CoreAttributes.MIME_TYPE.key(), "application/xml");
-        return session.putAllAttributes(flowFile, attributes);
-    }
-
-    OMElement executeSoapMethod(OMElement method) {
+    FlowFile executeSoapMethod(OMElement method, ProcessSession session, FlowFile flowFile) {
         try {
-            return serviceClient.sendReceive(method);
+            // send request and get response
+            OMElement result = serviceClient.sendReceive(method);
+            // get resp text
+            String response = result.getFirstElement().getText();
+            // write to new FlowFile
+            FlowFile respFlowFile = session.write(flowFile, out -> out.write(response.getBytes()));
+
+            // set attributes
+            final Map<String, String> attributes = new HashMap<>();
+            attributes.put(CoreAttributes.MIME_TYPE.key(), "application/xml");
+            return session.putAllAttributes(respFlowFile, attributes);
         } catch (AxisFault axisFault) {
             final ComponentLog logger = getLogger();
-            if (null != logger)
+            if (null != logger) {
                 logger.error("Failed invoking the web service method", axisFault);
-            throw new ProcessException(axisFault);
+            }
+            session.transfer(flowFile, REL_FAILURE);
+            return null;
         }
     }
 

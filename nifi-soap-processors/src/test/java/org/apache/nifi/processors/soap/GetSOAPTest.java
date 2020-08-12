@@ -23,33 +23,22 @@ import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.impl.common.OMNamespaceImpl;
 import org.apache.axiom.om.impl.llom.OMElementImpl;
 import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.Relationship;
-import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.*;
 import org.mockserver.client.server.MockServerClient;
 import org.mockserver.integration.ClientAndServer;
-import org.mockserver.junit.MockServerRule;
-import org.mockserver.model.Cookie;
-import org.mockserver.model.Delay;
-import org.mockserver.model.Header;
-import org.mockserver.model.Parameter;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
-import static org.mockserver.matchers.Times.exactly;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 import static org.mockserver.model.StringBody.exact;
-import static org.mockito.Mockito.*;
 
 public class GetSOAPTest {
 
@@ -171,7 +160,7 @@ public class GetSOAPTest {
                 );
 
         testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
-        testRunner.setProperty(GetSOAP.WSDL_URL,"http://localhost:1080/test_path.wsdl");
+        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
         testRunner.setProperty(GetSOAP.METHOD_NAME,"testMethod");
 
 
@@ -213,7 +202,7 @@ public class GetSOAPTest {
                 );
 
         testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
-        testRunner.setProperty(GetSOAP.WSDL_URL,"http://localhost:1080/test_path.wsdl");
+        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
         testRunner.setProperty(GetSOAP.METHOD_NAME,"testMethod");
         testRunner.setProperty(GetSOAP.USER_NAME,"username");
         testRunner.setProperty(GetSOAP.PASSWORD,"password");
@@ -241,7 +230,7 @@ public class GetSOAPTest {
 
 
         testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://graphical.weather.gov/xml/SOAP_server/ndfdXMLserver.php");
-        testRunner.setProperty(GetSOAP.WSDL_URL,"http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl");
+        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl");
         testRunner.setProperty(GetSOAP.METHOD_NAME,"LatLonListZipCode");
         testRunner.setProperty("zipCodeList","27510");
         testRunner.run();
