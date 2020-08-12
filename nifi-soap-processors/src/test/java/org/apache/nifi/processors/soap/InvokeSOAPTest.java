@@ -40,7 +40,7 @@ import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 import static org.mockserver.model.StringBody.exact;
 
-public class GetSOAPTest {
+public class InvokeSOAPTest {
 
     private TestRunner testRunner;
 //    @Rule
@@ -128,7 +128,7 @@ public class GetSOAPTest {
 
     @Before
     public  void init() {
-        testRunner = TestRunners.newTestRunner(GetSOAP.class);
+        testRunner = TestRunners.newTestRunner(InvokeSOAP.class);
 
         // mockServerClient = new MockServerClient("127.0.0.1", 1080);
     }
@@ -159,9 +159,9 @@ public class GetSOAPTest {
                                 .withBody(xmlBody)
                 );
 
-        testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
-        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
-        testRunner.setProperty(GetSOAP.METHOD_NAME,"testMethod");
+        testRunner.setProperty(InvokeSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
+        testRunner.setProperty(InvokeSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
+        testRunner.setProperty(InvokeSOAP.METHOD_NAME,"testMethod");
 
 
         testRunner.run();
@@ -201,11 +201,11 @@ public class GetSOAPTest {
                                 .withBody(xmlBody)
                 );
 
-        testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
-        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
-        testRunner.setProperty(GetSOAP.METHOD_NAME,"testMethod");
-        testRunner.setProperty(GetSOAP.USER_NAME,"username");
-        testRunner.setProperty(GetSOAP.PASSWORD,"password");
+        testRunner.setProperty(InvokeSOAP.ENDPOINT_URL,"http://localhost:1080/test_path");
+        testRunner.setProperty(InvokeSOAP.NAMESPACE_URL,"http://localhost:1080/test_path.wsdl");
+        testRunner.setProperty(InvokeSOAP.METHOD_NAME,"testMethod");
+        testRunner.setProperty(InvokeSOAP.USER_NAME,"username");
+        testRunner.setProperty(InvokeSOAP.PASSWORD,"password");
 
 
         testRunner.run();
@@ -229,9 +229,9 @@ public class GetSOAPTest {
     public void testGeoServiceHTTPWithArgumentsProcessor() throws IOException {
 
 
-        testRunner.setProperty(GetSOAP.ENDPOINT_URL,"http://graphical.weather.gov/xml/SOAP_server/ndfdXMLserver.php");
-        testRunner.setProperty(GetSOAP.NAMESPACE_URL,"http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl");
-        testRunner.setProperty(GetSOAP.METHOD_NAME,"LatLonListZipCode");
+        testRunner.setProperty(InvokeSOAP.ENDPOINT_URL,"http://graphical.weather.gov/xml/SOAP_server/ndfdXMLserver.php");
+        testRunner.setProperty(InvokeSOAP.NAMESPACE_URL,"http://graphical.weather.gov/xml/DWMLgen/wsdl/ndfdXML.wsdl");
+        testRunner.setProperty(InvokeSOAP.METHOD_NAME,"LatLonListZipCode");
         testRunner.setProperty("zipCodeList","27510");
         testRunner.run();
 
@@ -251,7 +251,7 @@ public class GetSOAPTest {
 
     @Test
     public void testRelationships(){
-        GetSOAP getSOAP = new GetSOAP();
+        InvokeSOAP getSOAP = new InvokeSOAP();
         Set<Relationship> relationshipSet = getSOAP.getRelationships();
         assert(null != relationshipSet);
         assert(1 == relationshipSet.size());
@@ -276,7 +276,7 @@ public class GetSOAPTest {
         OMFactory fac = OMAbstractFactory.getOMFactory();
         OMNamespace omNamespace = fac.createOMNamespace(namespaceUrl,namespacePrefix);
 
-        GetSOAP getSOAP = new GetSOAP();
+        InvokeSOAP getSOAP = new InvokeSOAP();
         OMElement element = getSOAP.getSoapMethod(fac,omNamespace,"testMethod");
         assert(null != element);
         assert(namespaceUrl.contentEquals(element.getNamespaceURI()));
@@ -308,7 +308,7 @@ public class GetSOAPTest {
 
         testRunner.setProperty(arg1,"111");
 
-        GetSOAP getSOAP = new GetSOAP();
+        InvokeSOAP getSOAP = new InvokeSOAP();
 //        getSOAP.addArgumentsToMethod(testRunner.getProcessContext(),fac,omNamespace,expectedElement);
 //        Iterator<OMElement> childItr = expectedElement.getChildElements();
 //        assert(null != childItr);
@@ -339,7 +339,7 @@ public class GetSOAPTest {
         childElement.setText(xmlBody);
         expectedElement.addChild(childElement);
 
-        GetSOAP getSOAP = new GetSOAP();
+        InvokeSOAP getSOAP = new InvokeSOAP();
 //        FlowFile flowFile = getSOAP.processSoapRequest(testRunner.getProcessSessionFactory().createSession(),expectedElement);
 //        assert(null != flowFile);
 //        ((MockFlowFile)flowFile).assertContentEquals(xmlBody.getBytes());

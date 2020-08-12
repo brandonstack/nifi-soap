@@ -30,6 +30,7 @@ import org.apache.axis2.transport.http.impl.httpclient3.HttpTransportPropertiesI
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.annotation.behavior.DynamicProperty;
+import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -50,7 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 
 @SupportsBatching
-//@InputRequirement(InputRequirement.Requirement.INPUT_FORBIDDEN)
+@InputRequirement(InputRequirement.Requirement.INPUT_ALLOWED)
 @Tags({"SOAP", "Get", "Ingest", "Ingress"})
 @CapabilityDescription("Execute provided request against the SOAP endpoint. The result will be left in it's orginal form. " +
         "This processor can be scheduled to run on a timer, or cron expression, using the standard scheduling methods, " +
@@ -63,8 +64,7 @@ import java.util.concurrent.atomic.AtomicReference;
                 "it matches the wsdl documentation for the SOAP service being called. In the case of arrays " +
                 "the name will be the name of the array and the key's specified in the value will be the element " +
                 "names pased.")
-
-public class GetSOAP extends AbstractProcessor {
+public class InvokeSOAP extends AbstractProcessor {
 
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
@@ -273,6 +273,11 @@ public class GetSOAP extends AbstractProcessor {
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
+        getLogger().info("into the system");
+        FlowFile flowFile = session.get();
+        if (flowFile == null){
+            return;
+        }
 
         //get the dynamic properties, execute the call and return the results
         OMFactory fac = OMAbstractFactory.getOMFactory();
@@ -280,10 +285,6 @@ public class GetSOAP extends AbstractProcessor {
 
         final OMElement method = getSoapMethod(fac, omNamespace, context.getProperty(METHOD_NAME).getValue());
 
-        FlowFile flowFile = session.get();
-        if (flowFile == null) {
-            flowFile = session.create();
-        }
         //now we need to walk the arguments and add them
         addArgumentsToMethod(context, fac, omNamespace, method, flowFile, session);
         // execute soap method
